@@ -23,25 +23,21 @@ class BrowserModel extends ChangeNotifier {
   Future<void> addTab({String url = 'https://www.google.com'}) async {
     final controller = WebviewController();
     final id = _uuid.v4();
-    
-    final tab = TabModel(
-      id: id, 
-      controller: controller,
-      url: url,
-    );
-    
+
+    final tab = TabModel(id: id, controller: controller, url: url);
+
     _tabs.add(tab);
     _currentIndex = _tabs.length - 1;
     notifyListeners();
-    
+
     // Initialize the controller
     await tab.initialize();
     await tab.controller.loadUrl(url);
-    
+
     // Listen for title changes
     tab.controller.title.listen((title) {
-        tab.title = title;
-        notifyListeners();
+      tab.title = title;
+      notifyListeners();
     });
 
     // Listen to url changes (if available directly or via other streams)
@@ -49,6 +45,49 @@ class BrowserModel extends ChangeNotifier {
     tab.controller.url.listen((newUrl) {
       tab.url = newUrl;
       notifyListeners();
+    });
+
+    // Inject Drag-to-Scroll script
+    tab.controller.loadingState.listen((state) {
+      if (state == LoadingState.navigationCompleted) {
+        tab.controller.executeScript(r'''
+          (function() {
+            let isDragging = false;
+            let lastX, lastY;
+            
+            window.addEventListener('mousedown', (e) => {
+              // Only left click (button 0) and not on interactive elements if needed needed
+              // But for now, global drag
+              isDragging = true;
+              lastX = e.clientX;
+              lastY = e.clientY;
+            });
+            
+            window.addEventListener('mouseup', () => {
+              isDragging = false;
+            });
+            
+            window.addEventListener('mouseleave', () => {
+              isDragging = false;
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+              if (isDragging) {
+                // Determine delta
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                
+                // Scroll
+                window.scrollBy(-deltaX, -deltaY);
+                
+                // Update last pos
+                lastX = e.clientX;
+                lastY = e.clientY;
+              }
+            });
+          })();
+        ''');
+      }
     });
 
     notifyListeners();
@@ -65,10 +104,10 @@ class BrowserModel extends ChangeNotifier {
     if (_currentIndex >= _tabs.length) {
       _currentIndex = _tabs.length - 1;
     }
-    
+
     if (_tabs.isEmpty) {
       // Create a new empty tab if all closed? Or just close app?
-      // Browsers usually keep one tab or show a start page. 
+      // Browsers usually keep one tab or show a start page.
       // We will create a new empty tab.
       await addTab();
     } else {

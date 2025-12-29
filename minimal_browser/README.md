@@ -1,16 +1,9 @@
-# minimal_browser
+#0bs
 
-A new Flutter project.
+A browser with zero bullshit.
 
-## Getting Started
+# Theme
 
-This project is a starting point for a Flutter application.
+Font: Bricolage Grotesque
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Colors: Coral F86F54 Paper F3F1E4 Charcoal 212121 Royal Blue 537CF7 Light Sea Green 00A6A6

@@ -12,6 +12,40 @@ class BrowserModel extends ChangeNotifier {
   int get currentIndex => _currentIndex;
   TabModel? get currentTab => _tabs.isNotEmpty ? _tabs[_currentIndex] : null;
 
+  // Custom CSS Rules
+  final Map<String, String> _customCssRules = {
+    'mail.google.com': r'''
+      /* Hide right side panel (Tasks, Keep, etc sidebar) */
+      .brC-brG { display: none !important; }
+      
+      /* Hide the right-hand side add-on bar container */
+      .bAw { width: 0 !important; display: none !important; }
+
+      /* Hide native ads (Top picks) in Promotions/Social tabs */
+      tr[class*="zA"] > td > div > span:contains("Ad") { display: none !important; } 
+      
+      /* Hide "Meet" and "Hangouts" left sidebar sections if present */
+      .aT5-aOt-I-JX-Jr, 
+      div[aria-label="Hangouts"], 
+      div[aria-label="Meet"] { display: none !important; }
+
+      /* General cleanup for cleaner look */
+      .aKh { height: auto !important; } /* Adjust header height if needed */
+    ''',
+  };
+
+  Map<String, String> get customCssRules => _customCssRules;
+
+  void addOrUpdateCssRule(String domain, String css) {
+    _customCssRules[domain] = css;
+    notifyListeners();
+  }
+
+  void removeCssRule(String domain) {
+    _customCssRules.remove(domain);
+    notifyListeners();
+  }
+
   BrowserModel() {
     _addInitialTab();
   }
@@ -50,47 +84,107 @@ class BrowserModel extends ChangeNotifier {
     // Inject Drag-to-Scroll script
     tab.controller.loadingState.listen((state) {
       if (state == LoadingState.navigationCompleted) {
+        _injectCustomCss(tab);
+
         tab.controller.executeScript(r'''
           (function() {
             let isDragging = false;
             let lastX, lastY;
-            
+            let scrollTarget = window;
+
+            function getScrollParent(node) {
+              if (!node || node === document || node === document.body || node === document.documentElement) {
+                return window;
+              }
+              
+              const style = window.getComputedStyle(node);
+              const overflowY = style.overflowY;
+              const overflowX = style.overflowX;
+              const isScrollableY = (overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight;
+              const isScrollableX = (overflowX === 'auto' || overflowX === 'scroll') && node.scrollWidth > node.clientWidth;
+
+              if (isScrollableY || isScrollableX) {
+                return node;
+              }
+              return getScrollParent(node.parentNode);
+            }
+
+            // Mouse Drag-to-Scroll
             window.addEventListener('mousedown', (e) => {
-              // Only left click (button 0) and not on interactive elements if needed needed
-              // But for now, global drag
+              if (e.button !== 0) return;
+              
+              const tag = e.target.tagName.toLowerCase();
+              if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'a' || tag === 'button') {
+                return;
+              }
+              if (e.target.isContentEditable) return;
+
+              scrollTarget = getScrollParent(e.target);
+              
               isDragging = true;
+              isDragStarted = false; // Reset drag started flag
+              startX = e.clientX;
+              startY = e.clientY;
               lastX = e.clientX;
               lastY = e.clientY;
             });
             
-            window.addEventListener('mouseup', () => {
-              isDragging = false;
-            });
-            
-            window.addEventListener('mouseleave', () => {
-              isDragging = false;
-            });
+            window.addEventListener('mouseup', () => { isDragging = false; isDragStarted = false; });
+            window.addEventListener('mouseleave', () => { isDragging = false; isDragStarted = false; });
             
             window.addEventListener('mousemove', (e) => {
-              if (isDragging) {
-                // Determine delta
+              if (isDragging && e.buttons === 1) { 
+                // Threshold check
+                if (!isDragStarted) {
+                  const moveX = Math.abs(e.clientX - startX);
+                  const moveY = Math.abs(e.clientY - startY);
+                  if (moveX > 5 || moveY > 5) {
+                    isDragStarted = true;
+                  } else {
+                    return; // Ignore micro-movements
+                  }
+                }
+
                 const deltaX = e.clientX - lastX;
                 const deltaY = e.clientY - lastY;
                 
-                // Scroll
-                window.scrollBy(-deltaX, -deltaY);
+                if (scrollTarget === window) {
+                   window.scrollBy(-deltaX, -deltaY);
+                } else {
+                   scrollTarget.scrollLeft -= deltaX;
+                   scrollTarget.scrollTop -= deltaY;
+                }
                 
-                // Update last pos
                 lastX = e.clientX;
                 lastY = e.clientY;
+              } else {
+                 isDragging = false;
+                 isDragStarted = false;
               }
             });
           })();
         ''');
       }
     });
+  }
 
-    notifyListeners();
+  void _injectCustomCss(TabModel tab) {
+    final url = tab.url;
+    _customCssRules.forEach((domain, css) {
+      if (url.contains(domain)) {
+        // Escape newlines and quotes for JS string
+        final safeCss = css.replaceAll('\n', ' ').replaceAll("'", "\\'");
+
+        tab.controller.executeScript('''
+          (function() {
+            const style = document.createElement('style');
+            style.textContent = '$safeCss';
+            document.head.appendChild(style);
+            console.log('Antigravity Browser: Custom CSS injected for $domain');
+          })();
+        ''');
+      }
+    });
   }
 
   Future<void> closeTab(String id) async {

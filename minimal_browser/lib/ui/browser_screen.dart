@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
 import '../models/browser_model.dart';
 import '../models/tab_model.dart';
 import '../services/process_stats_service.dart';
+import 'css_manager_screen.dart';
 
 class BrowserScreen extends StatelessWidget {
   const BrowserScreen({super.key});
@@ -48,7 +50,7 @@ class _CustomTitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return WindowTitleBarBox(
       child: Container(
-        color: const Color(0xFFF0F0F0), // Light grey background like Arc
+        color: Theme.of(context).colorScheme.surface, // Theme Paper color
         child: Row(
           children: [
             Expanded(child: const _TabsArea()),
@@ -127,7 +129,9 @@ class _TabItem extends StatelessWidget {
       width: 160,
       margin: const EdgeInsets.only(top: 4, left: 4, right: 2, bottom: 0),
       decoration: BoxDecoration(
-        color: isSelected ? Colors.white : Colors.transparent,
+        color: isSelected
+            ? Colors.white
+            : Colors.transparent, // Active tab white for contrast
         borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
         // Subtle border for inactive tabs or active
         boxShadow: isSelected
@@ -152,7 +156,9 @@ class _TabItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: Colors.black87,
+                  color: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.color, // Charcoal
                 ),
               ),
             ),
@@ -163,7 +169,11 @@ class _TabItem extends StatelessWidget {
               onTap: onClose,
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Icon(Icons.close, size: 14, color: Colors.grey[600]),
+                child: Icon(
+                  Icons.close,
+                  size: 14,
+                  color: Theme.of(context).iconTheme.color!.withOpacity(0.6),
+                ),
               ),
             ),
           ),
@@ -241,7 +251,7 @@ class _NavBarState extends State<_NavBar> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface, // Theme Paper
       child: Row(
         children: [
           // Nav Controls
@@ -272,28 +282,47 @@ class _NavBarState extends State<_NavBar> {
             child: Container(
               height: 36,
               decoration: BoxDecoration(
-                color: const Color(0xFFF7F7F7),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.transparent), // Clean look
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
                   const SizedBox(width: 12),
                   // Lock icon or generic site icon
-                  const Icon(Icons.lock_outline, size: 14, color: Colors.grey),
+                  Icon(
+                    Icons.lock_outline,
+                    size: 14,
+                    color: Theme.of(context).colorScheme.primary,
+                  ), // Coral
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _urlController,
                       textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.only(bottom: 8),
+                        contentPadding: const EdgeInsets.only(bottom: 8),
                         hintText: 'Enter URL',
-                        hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                        ),
                       ),
-                      style: const TextStyle(fontSize: 13),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
                       onSubmitted: (value) => model.updateUrl(value),
                     ),
                   ),
@@ -313,9 +342,59 @@ class _NavBarState extends State<_NavBar> {
               final ramMb = (stats.ramBytes / 1024 / 1024).toStringAsFixed(0);
               return Text(
                 '${ramMb}MB',
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                ),
               );
             },
+          ),
+
+          const SizedBox(width: 8),
+
+          // CSS Manager Button
+          IconButton(
+            icon: Icon(
+              Icons.style,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CssManagerScreen()),
+            ),
+            tooltip: 'CSS Manager',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            splashRadius: 20,
+          ),
+
+          const SizedBox(width: 4),
+
+          // Copy HTML Button
+          IconButton(
+            icon: Icon(
+              Icons.code,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            onPressed: () async {
+              if (model.currentTab != null) {
+                final html = await model.currentTab!.getHtmlContent();
+                if (context.mounted) {
+                  await Clipboard.setData(ClipboardData(text: html));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('HTML copied to clipboard')),
+                  );
+                }
+              }
+            },
+            tooltip: 'Copy HTML',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            splashRadius: 20,
           ),
         ],
       ),
@@ -332,7 +411,7 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(icon, size: 18, color: Colors.black54),
+      icon: Icon(icon, size: 18, color: Theme.of(context).iconTheme.color),
       onPressed: onPressed,
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

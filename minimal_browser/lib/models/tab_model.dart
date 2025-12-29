@@ -33,6 +33,17 @@ class TabModel {
     }
   }
 
+  Future<String> getHtmlContent() async {
+    if (!isInitialized) return '';
+    // webview_windows executeScript returns dynamic, usually the result of the evaluation
+    // We assume it returns the string or we might need to JSON decode if it returns a JSON string?
+    // The plugin docs say it returns the result of the execution.
+    final result = await controller.executeScript(
+      'document.documentElement.outerHTML',
+    );
+    return result.toString();
+  }
+
   void dispose() {
     controller.dispose();
   }
